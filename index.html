@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Customer Churn Prediction</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        /* Global styles */
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Inter', sans-serif;
+        }
+        body {
+            background-color: #f5f7fa;
+            color: #1f2937;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            background-color: #ffffff;
+            border-radius: 12px;
+            padding: 40px;
+            width: 100%;
+            max-width: 800px;
+            box-shadow: 0px 10px 15px rgba(0, 0, 0, 0.1);
+        }
+        h1 {
+            font-size: 2rem;
+            font-weight: 600;
+            margin-bottom: 10px;
+            color: #374151;
+        }
+        p {
+            font-size: 1rem;
+            color: #6b7280;
+            margin-bottom: 30px;
+        }
+        label {
+            display: block;
+            font-size: 0.875rem;
+            font-weight: 500;
+            margin-bottom: 8px;
+            color: #4b5563;
+        }
+        input[type="file"], input[type="number"], button {
+            display: block;
+            width: 100%;
+            max-width: 400px;
+            padding: 10px 15px;
+            font-size: 1rem;
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            outline: none;
+        }
+        input[type="file"] {
+            padding: 8px;
+            background-color: #f9fafb;
+        }
+        input[type="file"]:focus, input[type="number"]:focus {
+            border-color: #2563eb;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+        }
+        button {
+            background-color: #2563eb;
+            color: #ffffff;
+            border: none;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+        button:hover {
+            background-color: #1d4ed8;
+        }
+        #results-table {
+            width: 100%;
+            margin-top: 20px;
+            border-collapse: collapse;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        #results-table th, #results-table td {
+            padding: 15px;
+            text-align: left;
+            border-bottom: 1px solid #e5e7eb;
+            cursor: pointer;
+        }
+        #results-table th {
+            background-color: #2563eb;
+            color: #ffffff;
+            font-weight: 600;
+            position: relative;
+        }
+        #results-table th span {
+            margin-left: 5px;
+            font-size: 0.8rem;
+            font-weight: 400;
+        }
+        #results-table tr:last-child td {
+            border-bottom: none;
+        }
+        #results-table td {
+            background-color: #ffffff;
+            color: #4b5563;
+        }
+        .badge {
+            display: inline-block;
+            padding: 5px 10px;
+            border-radius: 5px;
+            font-size: 0.875rem;
+            font-weight: 500;
+            text-align: center;
+            margin-top: 10px;
+        }
+        .badge-low {
+            background-color: #d1fae5;
+            color: #10b981;
+        }
+        .badge-medium {
+            background-color: #fef9c3;
+            color: #facc15;
+        }
+        .badge-high {
+            background-color: #fee2e2;
+            color: #ef4444;
+        }
+        .spinner {
+            margin: 20px auto;
+            border: 4px solid #e5e7eb;
+            border-top: 4px solid #2563eb;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+        #pagination {
+            margin-top: 20px;
+            text-align: center;
+        }
+        #pagination button {
+            margin: 0 5px;
+            padding: 8px 12px;
+            font-size: 0.875rem;
+            display: inline-block;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Customer Churn Prediction</h1>
+        <p>Upload your CSV file and filter predictions by churn probability range:</p>
+        <form id="upload-form" enctype="multipart/form-data">
+            <label for="csv-file">Upload CSV</label>
+            <input type="file" id="csv-file" name="file" accept=".csv" required>
+            
+            <label for="min-churn">Min Churn Probability (%)</label>
+            <input type="number" id="min-churn" name="min-churn" min="0" max="100" value="80" required>
+            
+            <label for="max-churn">Max Churn Probability (%)</label>
+            <input type="number" id="max-churn" name="max-churn" min="0" max="100" value="100" required>
+            
+            <button type="submit">Predict</button>
+        </form>
+
+        <div id="result" style="display:none;">
+            <h2>Prediction Results</h2>
+            <table id="results-table">
+                <thead>
+                    <tr>
+                        <th>Customer ID</th>
+                        <th>CLTV</th>
+                        <th>Charges Per Month</th>
+                        <th>Churn Probability</th>
+                        <th>Risk Level</th>
+                    </tr>
+                </thead>
+                <tbody id="results-body"></tbody>
+            </table>
+            <div id="pagination"></div>
+        </div>
+        <div id="loading-spinner" style="display:none;">
+            <div class="spinner"></div>
+        </div>
+    </div>
+
+    <script>
+        let predictions = [];
+        let currentPage = 1;
+        const resultsPerPage = 20;
+
+        document.getElementById('upload-form').addEventListener('submit', async function(event) {
+            event.preventDefault();
+            const fileInput = document.getElementById('csv-file');
+            const minChurn = parseFloat(document.getElementById('min-churn').value) / 100;
+            const maxChurn = parseFloat(document.getElementById('max-churn').value) / 100;
+            const formData = new FormData();
+            formData.append('file', fileInput.files[0]);
+
+            document.getElementById('loading-spinner').style.display = 'block';
+            document.getElementById('result').style.display = 'none';
+
+            try {
+                const response = await fetch('http://127.0.0.1:8000/predict-churn', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (response.ok) {
+                    const result = await response.json();
+                    predictions = result.predictions.filter(prediction =>
+                        prediction.ChurnProbabilities >= minChurn &&
+                        prediction.ChurnProbabilities <= maxChurn
+                    );
+
+                    displayResults();
+                } else {
+                    alert('Error: ' + (await response.text()));
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Could not connect to the server. Please check your connection or server status.');
+            } finally {
+                document.getElementById('loading-spinner').style.display = 'none';
+            }
+        });
+
+        function displayResults() {
+            const resultsBody = document.getElementById('results-body');
+            resultsBody.innerHTML = '';
+
+            predictions.forEach(prediction => {
+                const riskLevel = prediction.ChurnProbabilities > 0.8 ? 'High' :
+                                  prediction.ChurnProbabilities > 0.5 ? 'Medium' : 'Low';
+                const badgeClass = riskLevel === 'High' ? 'badge-high' :
+                                   riskLevel === 'Medium' ? 'badge-medium' : 'badge-low';
+
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${prediction.CustomerID}</td>
+                    <td>${prediction.CLTV}</td>
+                    <td>${prediction.ChargesPerMonth}</td>
+                    <td>${(prediction.ChurnProbabilities * 100).toFixed(2)}%</td>
+                    <td><span class="badge ${badgeClass}">${riskLevel}</span></td>
+                `;
+                resultsBody.appendChild(row);
+            });
+
+            document.getElementById('result').style.display = 'block';
+        }
+    </script>
+</body>
+</html>
